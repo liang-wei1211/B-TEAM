@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>臺南市糖尿病共同照護網醫療院所地圖導覽</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    #map {
+      height: 480px;
+      z-index: 10;
+    }
+    .clinic-card.active {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    }
+    .custom-div-icon {
+      background: none;
+      border: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- 頂部 Header -->
+  <header class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 sm:px-6 flex flex-col sm:flex-row justify-between items-center gap-2">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-blue-600 rounded-lg shadow-sm">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight">臺南市糖尿病共同照護網・院所地圖導覽</h1>
+          <p class="text-blue-200 text-xs">健保照護品質・糖尿病共照網合約醫療院所（共 165 家）</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="statBadge" class="text-xs bg-blue-800/80 text-blue-200 border border-blue-700 px-3 py-1.5 rounded-full font-medium shadow-inner">
+          顯示 165 家院所
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-4 sm:px-6 flex-1 w-full space-y-4">
+
+    <!-- 篩選列 -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <!-- 行政區篩選 -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1">行政區域 (District)</label>
+        <select id="districtFilter" class="w-full bg-slate-50 border border-slate-300 text-slate-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+          <option value="">全部行政區 (全 33 區)</option>
+        </select>
+      </div>
+
+      <!-- 院所層級篩選 -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1">院所層級 (Level)</label>
+        <select id="levelFilter" class="w-full bg-slate-50 border border-slate-300 text-slate-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+          <option value="">全部層級</option>
+          <option value="診所">基層診所 (124 家)</option>
+          <option value="衛生所">各區衛生所 (17 家)</option>
+          <option value="地區醫院">地區醫院 (15 家)</option>
+          <option value="區域醫院">區域醫院 (6 家)</option>
+          <option value="醫學中心">醫學中心 (3 家)</option>
+        </select>
+      </div>
+
+      <!-- 關鍵字搜尋 -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1">快速搜尋 (名稱 / 路名 / 電話)</label>
+        <div class="relative">
+          <input type="text" id="searchInput" placeholder="例：成大、中西區、民生路..." class="w-full bg-slate-50 border border-slate-300 text-slate-700 rounded-xl pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+          <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 重設按鈕與捷徑 -->
+      <div class="flex items-end">
+        <button id="resetBtn" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl px-4 py-2 text-sm font-medium transition flex items-center justify-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          重設所有篩選
+        </button>
+      </div>
+    </div>
+
+    <!-- 地圖主區塊 -->
+    <div class="bg-white rounded-2xl p-2 shadow-sm border border-slate-200 overflow-hidden relative">
+      <div id="map" class="rounded-xl"></div>
+      <!-- 地圖圖例 -->
+      <div class="absolute bottom-4 left-4 z-[400] bg-white/95 backdrop-blur-sm p-2.5 rounded-xl shadow-md border border-slate-200 text-xs flex flex-wrap gap-2.5 items-center">
+        <span class="font-bold text-slate-600">圖例：</span>
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-purple-600 inline-block"></span> 醫學中心/區域醫院</div>
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-600 inline-block"></span> 地區醫院</div>
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-600 inline-block"></span> 基層診所</div>
+        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> 衛生所</div>
+      </div>
+    </div>
+
+    <!-- 列表清單 -->
+    <div>
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+          <span>院所詳細名單</span>
+          <span class="text-xs font-normal text-slate-500">（點擊卡片可定位地圖，支援一鍵撥號與導航）</span>
+        </h2>
+      </div>
+      <div id="clinicList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <!-- JS 動態生成卡片 -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 頁尾 -->
+  <footer class="bg-white border-t border-slate-200 py-4 mt-8 text-center text-xs text-slate-400">
+    資料來源：臺南市糖尿病共同照護網合約醫療院所名單 (健保署公開資訊)
+  </footer>
+
+  <script>
+    // 原始完整 165 筆院所資料
+    const clinicsData = [{"id": 1, "name": "國立成功大學醫學院附設醫院", "phone": "(06)2353535", "district": "北區", "address": "臺南市北區勝利路１３８號", "level": "醫學中心", "lat": 23.00221, "lng": 120.21923}, {"id": 2, "name": "奇美醫療財團法人奇美醫院", "phone": "(06)2812811", "district": "永康區", "address": "臺南市永康區中華路９０１號", "level": "醫學中心", "lat": 23.023643, "lng": 120.218561}, {"id": 3, "name": "奇美醫療財團法人奇美醫院樹林院區", "phone": "(06)2812811", "district": "南區", "address": "臺南市南區樹林街二段４４２號", "level": "醫學中心", "lat": 23.137907, "lng": 120.089419}, {"id": 4, "name": "衛生福利部臺南醫院", "phone": "(06)2200055", "district": "中西區", "address": "臺南市中西區中山路１２５號", "level": "區域醫院", "lat": 22.995819, "lng": 120.209228}, {"id": 5, "name": "衛生福利部嘉南療養院", "phone": "(06)2795019", "district": "仁德區", "address": "臺南市仁德區裕忠路５３９號", "level": "區域醫院", "lat": 22.976718, "lng": 120.241951}, {"id": 6, "name": "台南市立醫院(委託秀傳醫療社團法人經營)", "phone": "(06)2609926", "district": "東區", "address": "臺南市東區崇德路６７０號", "level": "區域醫院", "lat": 22.968534, "lng": 120.226743}, {"id": 7, "name": "台灣基督長老教會新樓醫療財團法人台南新樓醫院", "phone": "(06)2748316", "district": "東區", "address": "臺南市東區泉北里東門路１段５７號", "level": "區域醫院", "lat": 22.989158, "lng": 120.212807}, {"id": 8, "name": "奇美醫療財團法人柳營奇美醫院", "phone": "(06)6226999", "district": "柳營區", "address": "臺南市柳營區太康里２０１號", "level": "區域醫院", "lat": 23.289269, "lng": 120.324704}, {"id": 9, "name": "臺南市立安南醫院-委託中國醫藥大學興建經營", "phone": "(06)3553111", "district": "安南區", "address": "臺南市安南區長和路二段６６號", "level": "區域醫院", "lat": 23.064232, "lng": 120.223192}, {"id": 10, "name": "衛生福利部新營醫院", "phone": "(06)6351131", "district": "新營區", "address": "臺南市新營區信義街７３號", "level": "地區醫院", "lat": 23.309153, "lng": 120.313203}, {"id": 11, "name": "衛生福利部臺南醫院新化分院", "phone": "(06)5911929", "district": "新化區", "address": "臺南市新化區那拔里牧場７２號", "level": "地區醫院", "lat": 23.062491, "lng": 120.336408}, {"id": 12, "name": "衛生福利部胸腔病院", "phone": "(06)2705911", "district": "仁德區", "address": "臺南市仁德區中山路８６４號", "level": "地區醫院", "lat": 22.975462, "lng": 120.241802}, {"id": 13, "name": "高雄榮民總醫院臺南分院", "phone": "(06)3125101", "district": "永康區", "address": "臺南市永康區復興里復興路４２７號", "level": "地區醫院", "lat": 22.997218, "lng": 120.240316}, {"id": 14, "name": "仁愛醫療社團法人仁愛醫院", "phone": "(06)2213111", "district": "東區", "address": "臺南市東區北門路１段１０號及北門路１段３０巷１６號", "level": "地區醫院", "lat": 22.989864, "lng": 120.211619}, {"id": 15, "name": "新興醫療社團法人新興醫院", "phone": "(06)6330011", "district": "新營區", "address": "臺南市新營區中興路１０號", "level": "地區醫院", "lat": 23.303654, "lng": 120.316862}, {"id": 16, "name": "台灣基督長老教會新樓醫療財團法人麻豆新樓醫院", "phone": "(06)5702228", "district": "麻豆區", "address": "臺南市麻豆區麻佳路一段２０７號", "level": "地區醫院", "lat": 23.179874, "lng": 120.233033}, {"id": 17, "name": "奇美醫療財團法人佳里奇美醫院", "phone": "(06)7263333", "district": "佳里區", "address": "臺南市佳里區佳興里佳里興６０６號", "level": "地區醫院", "lat": 23.181698, "lng": 120.183662}, {"id": 18, "name": "大安婦幼醫院", "phone": "(06)2278899", "district": "中西區", "address": "臺南市中西區金華路三段１６７號１、２、３、４樓", "level": "地區醫院", "lat": 22.993065, "lng": 120.192984}, {"id": 19, "name": "郭綜合醫院", "phone": "(06)2221111", "district": "中西區", "address": "臺南市中西區民生路二段１８．２０．２２．２３．２４．２５．２７號", "level": "地區醫院", "lat": 22.995797, "lng": 120.173948}, {"id": 20, "name": "永川醫院", "phone": "(06)2245771", "district": "中西區", "address": "臺南市中西區觀音里成功路１６９號", "level": "地區醫院", "lat": 22.99807, "lng": 120.203752}, {"id": 21, "name": "永和醫院", "phone": "(06)2231191", "district": "中西區", "address": "臺南市中西區福安里府前路一段３０４巷２號", "level": "地區醫院", "lat": 22.990302, "lng": 120.19628}, {"id": 22, "name": "仁村醫院", "phone": "(06)2152607", "district": "中西區", "address": "臺南市中西區西門路１段４８６號１、２、３、４樓、４８８號１樓", "level": "地區醫院", "lat": 22.98363, "lng": 120.197745}, {"id": 23, "name": "營新醫院", "phone": "(06)6592345", "district": "新營區", "address": "臺南市新營區隋唐街２２８號", "level": "地區醫院", "lat": 23.308389, "lng": 120.299764}, {"id": 24, "name": "宏科醫院", "phone": "(06)5818868", "district": "善化區", "address": "臺南市善化區南關里三民路１－３５號", "level": "地區醫院", "lat": 23.127659, "lng": 120.287047}, {"id": 25, "name": "臺南市東區衛生所", "phone": "(06)2673613", "district": "東區", "address": "臺南市東區龍山里林森路１段４１８號", "level": "衛生所", "lat": 22.985012, "lng": 120.222043}, {"id": 26, "name": "臺南市南區衛生所", "phone": "(06)2618578", "district": "南區", "address": "臺南市南區南都里南和路６號", "level": "衛生所", "lat": 22.960677, "lng": 120.188068}, {"id": 27, "name": "臺南巿北區衛生所", "phone": "(06)2252404", "district": "北區", "address": "臺南市北區公園里西華街５０號", "level": "衛生所", "lat": 23.000114, "lng": 120.210875}, {"id": 28, "name": "台南市安南區衛生所", "phone": "(06)2567406", "district": "安南區", "address": "臺南市安南區淵東里仁安路７０號２樓", "level": "衛生所", "lat": 23.050087, "lng": 120.176047}, {"id": 29, "name": "臺南市新營區衛生所", "phone": "(06)6329421", "district": "新營區", "address": "臺南市新營區大宏里三民路７２號", "level": "衛生所", "lat": 23.30769, "lng": 120.317351}, {"id": 30, "name": "臺南市白河區衛生所", "phone": "(06)6852014", "district": "白河區", "address": "臺南市白河區永安里國光路５號", "level": "衛生所", "lat": 23.352034, "lng": 120.415814}, {"id": 31, "name": "臺南市新化區衛生所", "phone": "(06)5905398", "district": "新化區", "address": "臺南市新化區健康路十三鄰１４３號", "level": "衛生所", "lat": 23.034457, "lng": 120.302222}, {"id": 32, "name": "臺南市東山區衛生所", "phone": "(06)6802618", "district": "東山區", "address": "臺南市東山區東山里２３６號１樓", "level": "衛生所", "lat": 23.326329, "lng": 120.404723}, {"id": 33, "name": "臺南市官田區衛生所", "phone": "(06)5791493", "district": "官田區", "address": "臺南市官田區隆田里中山路一段１２８號", "level": "衛生所", "lat": 23.193068, "lng": 120.3161}, {"id": 34, "name": "臺南市七股區衛生所", "phone": "(06)7872277", "district": "七股區", "address": "臺南市七股區大埕里３７９號", "level": "衛生所", "lat": 23.140159, "lng": 120.138676}, {"id": 35, "name": "臺南市將軍區衛生所", "phone": "(06)7942007", "district": "將軍區", "address": "臺南市將軍區忠興里１８５－６號", "level": "衛生所", "lat": 23.201393, "lng": 120.153679}, {"id": 36, "name": "臺南市北門區衛生所", "phone": "(06)7862043", "district": "北門區", "address": "臺南市北門區北門里港北５０號", "level": "衛生所", "lat": 23.270354, "lng": 120.1252}, {"id": 37, "name": "臺南市玉井區衛生所", "phone": "(06)5742275", "district": "玉井區", "address": "臺南市玉井區玉田里中正路５號", "level": "衛生所", "lat": 23.122351, "lng": 120.459103}, {"id": 38, "name": "臺南市楠西區衛生所", "phone": "(06)5751006", "district": "楠西區", "address": "臺南市楠西區楠西里中正路２２６號", "level": "衛生所", "lat": 23.174357, "lng": 120.48601}, {"id": 39, "name": "台南市關廟區衛生所", "phone": "(06)5952395", "district": "關廟區", "address": "臺南市關廟區山西里中正路１０００號", "level": "衛生所", "lat": 22.963028, "lng": 120.327248}, {"id": 40, "name": "臺南市龍崎區衛生所", "phone": "(06)5941397", "district": "龍崎區", "address": "臺南市龍崎區崎頂里新市子１５８號", "level": "衛生所", "lat": 22.965212, "lng": 120.361824}, {"id": 41, "name": "陳俊達家醫科診所", "phone": "(06)6321211", "district": "新營區", "address": "臺南市新營區大宏里民治路９號１樓", "level": "診所", "lat": 23.310824, "lng": 120.320575}, {"id": 42, "name": "博揚診所", "phone": "(06)6325866", "district": "新營區", "address": "臺南市新營區東安街９號１、２樓", "level": "診所", "lat": 23.316731, "lng": 120.32473}, {"id": 43, "name": "郭昇峯內科診所", "phone": "(06)6567928", "district": "新營區", "address": "臺南市新營區新南里民治路３２２號１樓及夾層", "level": "診所", "lat": 23.306726, "lng": 120.303531}, {"id": 44, "name": "誼仁診所", "phone": "(06)5817267", "district": "善化區", "address": "臺南市善化區文昌里中正路３８７號１樓", "level": "診所", "lat": 23.127838, "lng": 120.293978}, {"id": 45, "name": "大成診所", "phone": "(06)5833300", "district": "善化區", "address": "臺南市善化區光文里大成路９８號１、２樓", "level": "診所", "lat": 23.130611, "lng": 120.303141}, {"id": 46, "name": "明翔診所", "phone": "(06)5816968", "district": "善化區", "address": "臺南市善化區東關里中山路３５０號１樓", "level": "診所", "lat": 23.132255, "lng": 120.293413}, {"id": 47, "name": "善化誠康診所", "phone": "(06)5830928", "district": "善化區", "address": "臺南市善化區光文里中山路３６號１樓", "level": "診所", "lat": 23.133509, "lng": 120.305514}, {"id": 48, "name": "康健診所", "phone": "(06)6864268", "district": "東山區", "address": "臺南市東山區東原里前大埔１８２號１樓", "level": "診所", "lat": 23.265211, "lng": 120.444264}, {"id": 49, "name": "晨祐診所", "phone": "(06)6892525", "district": "下營區", "address": "臺南市下營區後街里東興二街３６號１樓", "level": "診所", "lat": 23.238548, "lng": 120.264129}, {"id": 50, "name": "和平診所", "phone": "(06)6892269", "district": "下營區", "address": "臺南市下營區下營里和平街１６號１樓", "level": "診所", "lat": 23.236225, "lng": 120.264422}, {"id": 51, "name": "佳祐診所", "phone": "(06)5976778", "district": "安定區", "address": "臺南市安定區安定里安定４７－１６號１樓", "level": "診所", "lat": 23.121749, "lng": 120.238675}, {"id": 52, "name": "協和家醫科診所", "phone": "(06)2701507", "district": "仁德區", "address": "臺南市仁德區仁德里中正路三段７９號１樓", "level": "診所", "lat": 22.973896, "lng": 120.252574}, {"id": 53, "name": "林廷璋耳鼻喉科診所", "phone": "(06)2309919", "district": "歸仁區", "address": "臺南市歸仁區後市里民權三街９６、９８號１樓", "level": "診所", "lat": 22.969331, "lng": 120.290626}, {"id": 54, "name": "德安診所", "phone": "(06)2300299", "district": "歸仁區", "address": "臺南市歸仁區民權北路７５號１樓", "level": "診所", "lat": 22.969242, "lng": 120.287899}, {"id": 55, "name": "安仁診所", "phone": "(06)2300560", "district": "歸仁區", "address": "臺南市歸仁區許厝里中山路一段３８５號１、２、３、４樓", "level": "診所", "lat": 22.965872, "lng": 120.300757}, {"id": 56, "name": "盈泰診所", "phone": "(06)5962777", "district": "關廟區", "address": "臺南市關廟區山西里中正路１０２３號１樓", "level": "診所", "lat": 22.962917, "lng": 120.326635}, {"id": 57, "name": "楊寧娟內科診所", "phone": "(06)2721231", "district": "永康區", "address": "臺南市永康區崑山里永大路二段１５３號１、２樓", "level": "診所", "lat": 23.005341, "lng": 120.261143}, {"id": 58, "name": "亮心診所", "phone": "(06)3035160", "district": "永康區", "address": "臺南市永康區五王里振興路５０號 １、２樓", "level": "診所", "lat": 23.011723, "lng": 120.233864}, {"id": 59, "name": "成美診所", "phone": "(06)3039028", "district": "永康區", "address": "臺南市永康區五王里中山南路１６６號１、２樓", "level": "診所", "lat": 23.013784, "lng": 120.232174}, {"id": 60, "name": "周劍文診所", "phone": "(06)3110218", "district": "永康區", "address": "臺南市永康區小東路４２３巷２號１樓", "level": "診所", "lat": 22.999075, "lng": 120.233146}, {"id": 61, "name": "永德康內科診所", "phone": "(06)2032258", "district": "永康區", "address": "臺南市永康區埔園里中山路１１８號１樓", "level": "診所", "lat": 23.029218, "lng": 120.256516}, {"id": 62, "name": "大灣健全診所", "phone": "(06)2739652", "district": "永康區", "address": "臺南市永康區大灣里大灣路２７６號１樓", "level": "診所", "lat": 23.007625, "lng": 120.267821}, {"id": 63, "name": "永佳診所", "phone": "(06)2719595", "district": "永康區", "address": "臺南市永康區西灣里永大路二段１９５號１、２樓", "level": "診所", "lat": 23.00738, "lng": 120.261793}, {"id": 64, "name": "中華誠康診所", "phone": "(06)3029110", "district": "永康區", "address": "臺南市永康區西橋里中華路７７７號１樓", "level": "診所", "lat": 23.018492, "lng": 120.226014}, {"id": 65, "name": "大橋誠康診所", "phone": "(06)3029119", "district": "永康區", "address": "臺南市永康區大橋里大橋２街１８０號１樓", "level": "診所", "lat": 23.020534, "lng": 120.230169}, {"id": 66, "name": "楊純宜內科診所", "phone": "(06)3027003", "district": "永康區", "address": "臺南市永康區東橋里東橋５路１２０號１樓", "level": "診所", "lat": 23.021619, "lng": 120.235184}, {"id": 67, "name": "君美診所", "phone": "(06)3039028", "district": "永康區", "address": "臺南市永康區五王里中山南路１６６號２樓", "level": "診所", "lat": 23.013784, "lng": 120.232174}, {"id": 68, "name": "項國威內科診所", "phone": "(06)2691567", "district": "東區", "address": "臺南市東區德光里崇學路１４１號１、２樓", "level": "診所", "lat": 22.979574, "lng": 120.222761}, {"id": 69, "name": "達俊診所", "phone": "(06)2361337", "district": "東區", "address": "臺南市東區圍下里青年路４３４號１－２樓", "level": "診所", "lat": 22.991102, "lng": 120.216995}, {"id": 70, "name": "李昭榮內科診所", "phone": "(06)2610266", "district": "南區", "address": "臺南市南區金華路二段２８１號１樓", "level": "診所", "lat": 22.984172, "lng": 120.191526}, {"id": 71, "name": "康舟診所", "phone": "(06)2655345", "district": "南區", "address": "臺南市南區府南里金華路一段４８６號２樓", "level": "診所", "lat": 22.973013, "lng": 120.19092}, {"id": 72, "name": "忠群診所", "phone": "(06)2280808", "district": "中西區", "address": "臺南市中西區民生路二段４０３號１樓", "level": "診所", "lat": 22.99745, "lng": 120.188241}, {"id": 73, "name": "吳明彥內科診所", "phone": "(06)2220596", "district": "中西區", "address": "臺南市中西區成功路７３號１樓", "level": "診所", "lat": 22.997613, "lng": 120.208522}, {"id": 74, "name": "奇聖診所", "phone": "(06)3584561", "district": "中西區", "address": "臺南市中西區西和里文賢路１９９號１樓", "level": "診所", "lat": 23.003744, "lng": 120.193566}, {"id": 75, "name": "曾泌尿科診所", "phone": "(06)2525533", "district": "北區", "address": "臺南市北區華德里海安路三段９７２號１－２樓", "level": "診所", "lat": 23.019456, "lng": 120.199939}, {"id": 76, "name": "劉伊薰小兒科診所", "phone": "(06)2832111", "district": "北區", "address": "臺南市北區成德里北安路一段２５９號１樓", "level": "診所", "lat": 23.018995, "lng": 120.20677}, {"id": 77, "name": "潮代診所", "phone": "(06)2359595", "district": "北區", "address": "臺南市北區振興里林森路３段１６５號２樓", "level": "診所", "lat": 23.005676, "lng": 120.22457}, {"id": 78, "name": "雨欣診所", "phone": "(06)2832111", "district": "北區", "address": "臺南市北區成德里北安路一段２５９號１樓", "level": "診所", "lat": 23.018995, "lng": 120.20677}, {"id": 79, "name": "仁欣診所", "phone": "(06)2513066", "district": "北區", "address": "臺南市北區公園路９９８－１號１樓", "level": "診所", "lat": 23.016895, "lng": 120.215016}, {"id": 80, "name": "誠逸診所", "phone": "(06)2516866", "district": "北區", "address": "臺南市北區成德里北安路一段１８９號１－２樓", "level": "診所", "lat": 23.017963, "lng": 120.207966}, {"id": 81, "name": "世安家庭診所", "phone": "(06)2510088", "district": "北區", "address": "臺南市北區成德里和緯路２段５００號１、２樓", "level": "診所", "lat": 23.012222, "lng": 120.201496}, {"id": 82, "name": "安南高家醫診所", "phone": "(06)2475699", "district": "安南區", "address": "臺南市安南區溪心里安中路二段１６６、１６８號１－２樓", "level": "診所", "lat": 23.046691, "lng": 120.186718}, {"id": 83, "name": "李聰明內科診所", "phone": "(06)3966800", "district": "安南區", "address": "臺南市安南區東和里長和路一段５０１號１樓", "level": "診所", "lat": 23.058416, "lng": 120.232089}, {"id": 84, "name": "安平西醫診所", "phone": "(06)2985999", "district": "安平區", "address": "臺南市安平區育平里永華路二段８２１號１樓", "level": "診所", "lat": 22.991213, "lng": 120.168488}, {"id": 85, "name": "喜恩診所", "phone": "(06)2933566", "district": "安平區", "address": "臺南市安平區國平里永華路二段５７１號１樓", "level": "診所", "lat": 22.99043, "lng": 120.174385}, {"id": 86, "name": "豐盈診所", "phone": "(06)2989900", "district": "安平區", "address": "臺南市安平區文平里永華路２段３９３號１、２樓", "level": "診所", "lat": 22.98985, "lng": 120.178863}, {"id": 87, "name": "王肇陽皮膚科診所", "phone": "(06)2891634", "district": "東區", "address": "臺南市東區德光里崇明路７９號", "level": "診所", "lat": 22.980426, "lng": 120.217271}, {"id": 88, "name": "陳煌奇耳鼻喉科診所", "phone": "(06)2680472", "district": "東區", "address": "臺南市東區龍山里崇學路２７１號之４ １樓及２７１號之５ １樓", "level": "診所", "lat": 22.98271, "lng": 120.225722}, {"id": 89, "name": "謝明憲內科診所", "phone": "(06)2086360", "district": "東區", "address": "臺南市東區中西里長榮路２段９３號", "level": "診所", "lat": 22.990492, "lng": 120.220648}, {"id": 90, "name": "曾立榮內科診所", "phone": "(06)3353678", "district": "東區", "address": "臺南市東區中華東路二段３３９號", "level": "診所", "lat": 22.981451, "lng": 120.229916}, {"id": 91, "name": "活水神經內科診所", "phone": "(06)3357513", "district": "東區", "address": "臺南市東區德光里崇明路２０５號１－２樓", "level": "診所", "lat": 22.977982, "lng": 120.21992}, {"id": 92, "name": "江錫輝診所", "phone": "(06)2748888", "district": "東區", "address": "臺南市東區龍山里林森路１段３６３號１樓", "level": "診所", "lat": 22.984575, "lng": 120.22099}, {"id": 93, "name": "林黑潮診所", "phone": "(06)2656789", "district": "南區", "address": "臺南市南區金華路一段３７７號", "level": "診所", "lat": 22.969694, "lng": 120.190265}, {"id": 94, "name": "洪允宗診所", "phone": "(06)2915632", "district": "南區", "address": "臺南市南區明亮里金華路一段２４６號１樓", "level": "診所", "lat": 22.967493, "lng": 120.19031}, {"id": 95, "name": "張士澎內科家醫科診所", "phone": "(06)2216216", "district": "南區", "address": "臺南市南區新昌里西門路一段６１１號", "level": "診所", "lat": 22.985316, "lng": 120.197345}, {"id": 96, "name": "張祐禎家庭醫學科診所", "phone": "(06)2920909", "district": "南區", "address": "臺南市南區中華南路二段７２號", "level": "診所", "lat": 22.962208, "lng": 120.193805}, {"id": 97, "name": "唐勳樟診所", "phone": "(06)2642266", "district": "南區", "address": "臺南市南區金華路一段１６０號１樓", "level": "診所", "lat": 22.965263, "lng": 120.189999}, {"id": 98, "name": "張富全診所", "phone": "(06)2220516", "district": "中西區", "address": "臺南市中西區南廠里永華路一段１９８號１樓", "level": "診所", "lat": 22.988364, "lng": 120.191568}, {"id": 99, "name": "謝智超達恩診所", "phone": "(06)2285505", "district": "中西區", "address": "臺南市中西區西門路２段３７５號３、４樓", "level": "診所", "lat": 22.998304, "lng": 120.200284}, {"id": 100, "name": "張金石小兒科診所", "phone": "(06)2216855", "district": "北區", "address": "臺南市北區公園路１９１號", "level": "診所", "lat": 22.999265, "lng": 120.207567}, {"id": 101, "name": "第一聯合診所", "phone": "(06)2350116", "district": "北區", "address": "臺南市北區勝利路４２１號", "level": "診所", "lat": 23.004746, "lng": 120.218778}, {"id": 102, "name": "鄧正鎧內科診所", "phone": "(06)2752887", "district": "北區", "address": "臺南市北區小東路１７１號", "level": "診所", "lat": 23.000384, "lng": 120.227152}, {"id": 103, "name": "陳冠文內科診所", "phone": "(06)2752887", "district": "北區", "address": "臺南市北區小東路１７１號", "level": "診所", "lat": 23.000384, "lng": 120.227152}, {"id": 104, "name": "蘇耳鼻喉科診所", "phone": "(06)3507711", "district": "北區", "address": "臺南市北區大豐里文賢路２６１、２６３號１樓", "level": "診所", "lat": 23.006763, "lng": 120.193482}, {"id": 105, "name": "海安小兒科診所", "phone": "(06)3589696", "district": "北區", "address": "臺南市北區元美里海安路３段７６１、７６１－１號１樓", "level": "診所", "lat": 23.012981, "lng": 120.197625}, {"id": 106, "name": "弘典內科診所", "phone": "(06)2007588", "district": "北區", "address": "臺南市北區小東路３２３號Ｂ１－３樓", "level": "診所", "lat": 22.999227, "lng": 120.230911}, {"id": 107, "name": "邱信輝內科診所", "phone": "(06)2822227", "district": "北區", "address": "臺南市北區海安路３段３５８號１樓", "level": "診所", "lat": 23.009467, "lng": 120.200159}, {"id": 108, "name": "郭重德診所", "phone": "(06)2262953", "district": "中西區", "address": "臺南市中西區民生路一段９０號", "level": "診所", "lat": 22.993744, "lng": 120.201916}, {"id": 109, "name": "游新診所", "phone": "(06)2149009", "district": "中西區", "address": "臺南市中西區健康路１段３７０號之１、２號１樓", "level": "診所", "lat": 22.981632, "lng": 120.199189}, {"id": 110, "name": "朱嘉生診所", "phone": "(06)2573180", "district": "安南區", "address": "臺南市安南區城北里安中路六段６２０、６２２號１樓", "level": "診所", "lat": 23.061097, "lng": 120.135122}, {"id": 111, "name": "榮銘內科診所", "phone": "(06)2593107", "district": "安南區", "address": "臺南市安南區海佃路１段５０號１樓－３樓", "level": "診所", "lat": 23.021169, "lng": 120.192415}, {"id": 112, "name": "賴俊良骨外科診所", "phone": "(06)3559260", "district": "安南區", "address": "臺南市安南區新順里安和路２段２６７號１樓", "level": "診所", "lat": 23.042511, "lng": 120.215861}, {"id": 113, "name": "魏大倫耳鼻喉科診所", "phone": "(06)2568119", "district": "安南區", "address": "臺南市安南區安和路１段３５６號１樓", "level": "診所", "lat": 23.03328, "lng": 120.212543}, {"id": 114, "name": "安河神經內科診所", "phone": "(06)2810700", "district": "安南區", "address": "臺南市安南區安和路１段４０號１樓", "level": "診所", "lat": 23.026678, "lng": 120.21556}, {"id": 115, "name": "應達儀內科診所", "phone": "(06)3559216", "district": "安南區", "address": "臺南市安南區安和路４段３１６號１樓", "level": "診所", "lat": 23.057459, "lng": 120.218791}, {"id": 116, "name": "穠田聯合診所", "phone": "(06)2950808", "district": "安平區", "address": "臺南市安平區永華路二段１０５９號１、２樓", "level": "診所", "lat": 22.991444, "lng": 120.166246}, {"id": 117, "name": "廖健良診所", "phone": "(06)2252983", "district": "中西區", "address": "臺南市中西區三民里民生路１段３０號１樓", "level": "診所", "lat": 22.993206, "lng": 120.204007}, {"id": 118, "name": "曾建昌內小兒科診所", "phone": "(06)6359119", "district": "新營區", "address": "臺南市新營區忠政里中山路２０２號", "level": "診所", "lat": 23.303803, "lng": 120.312921}, {"id": 119, "name": "康庭小兒科診所（樂恩聯合診所）", "phone": "(06)6331666", "district": "新營區", "address": "臺南市新營區三民路１０６、１０６–１２號", "level": "診所", "lat": 23.308311, "lng": 120.319719}, {"id": 120, "name": "周書澤內科診所", "phone": "(06)6591010", "district": "新營區", "address": "臺南市新營區民治路３５２號", "level": "診所", "lat": 23.305764, "lng": 120.303147}, {"id": 121, "name": "吳明強診所", "phone": "(06)6832685", "district": "白河區", "address": "臺南市白河區國泰路１１１號１樓", "level": "診所", "lat": 23.347686, "lng": 120.413287}, {"id": 122, "name": "以琳內科診所", "phone": "(06)7211102", "district": "佳里區", "address": "臺南市佳里區建南街１６１號", "level": "診所", "lat": 23.159275, "lng": 120.176561}, {"id": 123, "name": "人人診所", "phone": "(06)7228895", "district": "佳里區", "address": "臺南市佳里區鎮山里自由街１１０號", "level": "診所", "lat": 23.155961, "lng": 120.178079}, {"id": 124, "name": "王覲瑜診所", "phone": "(06)5902773", "district": "新化區", "address": "臺南市新化區民權街１５號", "level": "診所", "lat": 23.036348, "lng": 120.304741}, {"id": 125, "name": "丁江龍診所", "phone": "(06)5903419", "district": "新化區", "address": "臺南市新化區中山路１５０號", "level": "診所", "lat": 23.037102, "lng": 120.310135}, {"id": 126, "name": "陳相國聯合診所", "phone": "(06)5908869", "district": "新化區", "address": "臺南市新化區清水里中山路４８９號１樓及４９１之１號１－４樓", "level": "診所", "lat": 23.035673, "lng": 120.303137}, {"id": 127, "name": "劉琳榕小兒科診所", "phone": "(06)5970088", "district": "新化區", "address": "臺南市新化區太平里忠孝路１１８、１２０、１２２號（１樓）", "level": "診所", "lat": 23.038026, "lng": 120.30454}, {"id": 128, "name": "崇祐小兒科診所", "phone": "(06)5980342", "district": "新化區", "address": "臺南市新化區忠孝路２８５號", "level": "診所", "lat": 23.036874, "lng": 120.301062}, {"id": 129, "name": "陳清煌診所", "phone": "(06)5831450", "district": "善化區", "address": "臺南市善化區光文里中山路２９６號", "level": "診所", "lat": 23.13213, "lng": 120.295278}, {"id": 130, "name": "蘇炳文內科診所", "phone": "(06)5838788", "district": "善化區", "address": "臺南市善化區文昌里中正路３６２號、３６６號１－３樓", "level": "診所", "lat": 23.127979, "lng": 120.294175}, {"id": 131, "name": "侯瑞合診所", "phone": "(06)7836611", "district": "學甲區", "address": "臺南市學甲區仁得里華宗路３６５號", "level": "診所", "lat": 23.232129, "lng": 120.18214}, {"id": 132, "name": "全美診所", "phone": "(06)7835119", "district": "學甲區", "address": "臺南市學甲區華宗路３７３號", "level": "診所", "lat": 23.232327, "lng": 120.182094}, {"id": 133, "name": "德昌診所", "phone": "(06)6623338", "district": "後壁區", "address": "臺南市後壁區墨林里菁寮２００號", "level": "診所", "lat": 23.37884, "lng": 120.335949}, {"id": 134, "name": "民生診所", "phone": "(06)6986015", "district": "六甲區", "address": "臺南市六甲區六甲里中正路５３１號", "level": "診所", "lat": 23.231106, "lng": 120.351375}, {"id": 135, "name": "泰和診所", "phone": "(06)6989595", "district": "六甲區", "address": "臺南市六甲區二甲里中山路１０１．１０３號", "level": "診所", "lat": 23.232445, "lng": 120.334943}, {"id": 136, "name": "賴冠維診所", "phone": "(06)6990990", "district": "六甲區", "address": "臺南市六甲區復興街５５號", "level": "診所", "lat": 23.230353, "lng": 120.35266}, {"id": 137, "name": "千日好診所", "phone": "(06)7954509", "district": "西港區", "address": "臺南市西港區西港里中山路３５０號", "level": "診所", "lat": 23.122012, "lng": 120.20335}, {"id": 138, "name": "新祐小兒科診所", "phone": "(06)5999129", "district": "新市區", "address": "臺南市新市區大營里大營１３０號之１０", "level": "診所", "lat": 23.091763, "lng": 120.309179}, {"id": 139, "name": "仁得內科診所", "phone": "(06)2496918", "district": "仁德區", "address": "臺南市仁德區一甲里義林１２街１３６號１－４樓", "level": "診所", "lat": 22.973004, "lng": 120.261994}, {"id": 140, "name": "吳世安內科診所（吳世安陳沛仁聯合診所）", "phone": "(06)2393396", "district": "歸仁區", "address": "臺南市歸仁區民族北街１７巷２、６號", "level": "診所", "lat": 22.96778, "lng": 120.291482}, {"id": 141, "name": "懷仁內科診所", "phone": "(06)2303995", "district": "歸仁區", "address": "臺南市歸仁區後市里中山路一段５３０號", "level": "診所", "lat": 22.967221, "lng": 120.29281}, {"id": 142, "name": "裕文診所", "phone": "(06)2397095", "district": "歸仁區", "address": "臺南市歸仁區辜厝里民族南街１號１樓", "level": "診所", "lat": 22.966636, "lng": 120.29226}, {"id": 143, "name": "沈耀明家庭醫學科診所", "phone": "(06)2304653", "district": "歸仁區", "address": "臺南市歸仁區中山路二段７６號", "level": "診所", "lat": 22.967141, "lng": 120.291847}, {"id": 144, "name": "陳沛仁家庭醫學科診所", "phone": "(06)3308683", "district": "歸仁區", "address": "臺南市歸仁區民族北街１７巷２、６號", "level": "診所", "lat": 22.96778, "lng": 120.291482}, {"id": 145, "name": "陳育瑄小兒科診所", "phone": "(06)5960077", "district": "關廟區", "address": "臺南市關廟區香洋里中山路一段２５１號１樓", "level": "診所", "lat": 22.95906, "lng": 120.330557}, {"id": 146, "name": "鄭飛良診所", "phone": "(06)2733337", "district": "永康區", "address": "臺南市永康區東灣里大灣路３９０號１樓", "level": "診所", "lat": 23.005312, "lng": 120.266473}, {"id": 147, "name": "侯嘉修內科診所", "phone": "(06)2027111", "district": "永康區", "address": "臺南市永康區西橋里中山南路３３號", "level": "診所", "lat": 23.011889, "lng": 120.226766}, {"id": 148, "name": "顏大翔內科診所（顏大翔聯合診所）", "phone": "(06)2730320", "district": "永康區", "address": "臺南市永康區大灣路８６８號", "level": "診所", "lat": 22.999928, "lng": 120.256631}, {"id": 149, "name": "怡人診所", "phone": "(06)2720777", "district": "永康區", "address": "臺南市永康區復興路１５號", "level": "診所", "lat": 22.998494, "lng": 120.25004}, {"id": 150, "name": "郭達霖家庭醫學科診所", "phone": "(06)2730321", "district": "永康區", "address": "臺南市永康區大灣路８６８號", "level": "診所", "lat": 22.999928, "lng": 120.256631}, {"id": 151, "name": "永慶診所", "phone": "(06)3133996", "district": "永康區", "address": "臺南市永康區復國一路１９８號", "level": "診所", "lat": 23.006328, "lng": 120.246246}, {"id": 152, "name": "三愛診所", "phone": "(06)3130970", "district": "永康區", "address": "臺南市永康區建國里復國路６２號１樓", "level": "診所", "lat": 23.001086, "lng": 120.246566}, {"id": 153, "name": "史地分小兒科診所", "phone": "(06)3039099", "district": "永康區", "address": "臺南市永康區大橋一街５７號", "level": "診所", "lat": 23.016926, "lng": 120.227418}, {"id": 154, "name": "台南市六甲區衛生所", "phone": "(06)6982013", "district": "六甲區", "address": "臺南市六甲區二甲里中華路１１０號", "level": "衛生所", "lat": 23.224673, "lng": 120.346879}, {"id": 155, "name": "日和耳鼻喉科診所", "phone": "(06)6520182", "district": "鹽水區", "address": "臺南市鹽水區水正里中正路４５號１、２樓", "level": "診所", "lat": 23.31962, "lng": 120.267805}, {"id": 156, "name": "安聯診所", "phone": "(06)6852555", "district": "白河區", "address": "臺南市白河區白河里富民路６２號", "level": "診所", "lat": 23.344826, "lng": 120.415953}, {"id": 157, "name": "琬安文化診所", "phone": "(06)2797081", "district": "仁德區", "address": "臺南市仁德區仁義里中山路２６３號１－２樓", "level": "診所", "lat": 22.970405, "lng": 120.261117}, {"id": 158, "name": "永賀診所", "phone": "(06)2053977", "district": "永康區", "address": "臺南市永康區西灣里永大路二段３９７號１樓", "level": "診所", "lat": 23.012294, "lng": 120.263266}, {"id": 159, "name": "昕晴診所", "phone": "(06)2686668", "district": "東區", "address": "臺南市東區崇成里崇明二十四街１號１樓", "level": "診所", "lat": 22.96687, "lng": 120.225887}, {"id": 160, "name": "全裕診所", "phone": "(06)2080298", "district": "東區", "address": "臺南市東區富強里裕農路３０２號１－２樓", "level": "診所", "lat": 22.986515, "lng": 120.228708}, {"id": 161, "name": "健蔚內科診所", "phone": "(06)2627599", "district": "南區", "address": "臺南市南區興農里萬年一街２８６巷６１號１樓", "level": "診所", "lat": 22.931861, "lng": 120.185738}, {"id": 162, "name": "陳文峯耳鼻喉科診所", "phone": "(06)2833398", "district": "北區", "address": "臺南市北區正覺里公園路７０３號１樓", "level": "診所", "lat": 23.016742, "lng": 120.214586}, {"id": 163, "name": "双美診所", "phone": "(06)5746996", "district": "玉井區", "address": "臺南市玉井區玉田里太子街３９巷８號", "level": "診所", "lat": 23.122734, "lng": 120.460684}, {"id": 164, "name": "永大診所", "phone": "(06)2310932", "district": "永康區", "address": "臺南市永康區永康里中山路１７號", "level": "診所", "lat": 23.026914, "lng": 120.256887}, {"id": 165, "name": "中正耳鼻喉科診所", "phone": "(06)2333566", "district": "永康區", "address": "臺南市永康區正強里正強街２３１號及２３３號１－２樓", "level": "診所", "lat": 23.029662, "lng": 120.251574}];
+
+    // 層級顏色定義
+    const levelColors = {
+      "醫學中心": { bg: "bg-purple-100", text: "text-purple-800", border: "border-purple-200", pin: "#9333ea" },
+      "區域醫院": { bg: "bg-indigo-100", text: "text-indigo-800", border: "border-indigo-200", pin: "#4f46e5" },
+      "地區醫院": { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200", pin: "#2563eb" },
+      "診所": { bg: "bg-emerald-100", text: "text-emerald-800", border: "border-emerald-200", pin: "#059669" },
+      "衛生所": { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-200", pin: "#d97706" }
+    };
+
+    // 初始化行政區下拉選單
+    const districts = [...new Set(clinicsData.map(c => c.district))].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    const districtSelect = document.getElementById('districtFilter');
+    districts.forEach(d => {
+      const count = clinicsData.filter(c => c.district === d).length;
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = `${d} (${count} 家)`;
+      districtSelect.appendChild(opt);
+    });
+
+    // 初始化 Leaflet 地圖 (聚焦台南市中心)
+    const map = L.map('map').setView([23.00, 120.22], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap 貢獻者'
+    }).addTo(map);
+
+    let markersLayer = L.layerGroup().addTo(map);
+    const markerStore = {};
+
+    // 建立自訂圖釘
+    function createPinIcon(color) {
+      return L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2.5px solid #ffffff; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+    }
+
+    // 渲染畫面
+    function render() {
+      const selectedDistrict = districtSelect.value;
+      const selectedLevel = document.getElementById('levelFilter').value;
+      const searchText = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      // 篩選資料
+      const filtered = clinicsData.filter(item => {
+        const matchDistrict = !selectedDistrict || item.district === selectedDistrict;
+        const matchLevel = !selectedLevel || item.level === selectedLevel;
+        const matchSearch = !searchText ||
+          item.name.toLowerCase().includes(searchText) ||
+          item.address.toLowerCase().includes(searchText) ||
+          item.phone.includes(searchText);
+        return matchDistrict && matchLevel && matchSearch;
+      });
+
+      // 更新統計
+      document.getElementById('statBadge').textContent = `顯示 ${filtered.length} / ${clinicsData.length} 家院所`;
+
+      // 清除舊圖標
+      markersLayer.clearLayers();
+      const clinicListEl = document.getElementById('clinicList');
+
+      if (filtered.length === 0) {
+        clinicListEl.innerHTML = `
+          <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-300">
+            查無符合條件的院所，請調整搜尋字詞或行政區
+          </div>`;
+        return;
+      }
+
+      let cardsHtml = '';
+      const bounds = [];
+
+      filtered.forEach(item => {
+        const style = levelColors[item.level] || { bg: "bg-slate-100", text: "text-slate-800", border: "border-slate-200", pin: "#64748b" };
+
+        // 地圖圖釘
+        const marker = L.marker([item.lat, item.lng], { icon: createPinIcon(style.pin) });
+        marker.bindPopup(`
+          <div class="text-sm p-1">
+            <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-bold ${style.bg} ${style.text} mb-1">${item.level}</span>
+            <div class="font-bold text-slate-900 text-base leading-snug">${item.name}</div>
+            <div class="text-xs text-slate-600 mt-1">${item.address}</div>
+            <div class="text-xs text-blue-600 font-medium mt-0.5">📞 ${item.phone}</div>
+            <div class="mt-2 pt-2 border-t border-slate-100 flex gap-2">
+              <a href="tel:${item.phone}" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-medium">撥打電話</a>
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}" target="_blank" class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-medium">Google 導航 ↗</a>
+            </div>
+          </div>
+        `);
+
+        marker.on('click', () => {
+          highlightCard(item.id);
+        });
+
+        marker.addTo(markersLayer);
+        markerStore[item.id] = marker;
+        bounds.push([item.lat, item.lng]);
+
+        // 卡片 HTML
+        cardsHtml += `
+          <div id="card-${item.id}" onclick="focusItem(${item.id})" class="clinic-card bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group">
+            <div>
+              <div class="flex justify-between items-start gap-2 mb-2">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  臺南市 ${item.district}
+                </span>
+                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${style.bg} ${style.text} border ${style.border}">
+                  ${item.level}
+                </span>
+              </div>
+              <h3 class="text-base font-bold text-slate-900 group-hover:text-blue-600 transition leading-snug">
+                ${item.name}
+              </h3>
+              <p class="text-xs text-slate-500 mt-1.5 flex items-start gap-1">
+                <svg class="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>${item.address}</span>
+              </p>
+            </div>
+
+            <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <a href="tel:${item.phone}" onclick="event.stopPropagation();" class="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                ${item.phone || '無電話'}
+              </a>
+
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}" target="_blank" onclick="event.stopPropagation();" class="text-slate-500 hover:text-emerald-600 font-medium flex items-center gap-0.5">
+                導航
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        `;
+      });
+
+      clinicListEl.innerHTML = cardsHtml;
+
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+      }
+    }
+
+    // 點選卡片聚焦定位
+    window.focusItem = function(id) {
+      const item = clinicsData.find(c => c.id === id);
+      const marker = markerStore[id];
+      if (item && marker) {
+        map.setView([item.lat, item.lng], 15, { animate: true });
+        marker.openPopup();
+        highlightCard(id);
+      }
+    };
+
+    function highlightCard(id) {
+      document.querySelectorAll('.clinic-card').forEach(el => el.classList.remove('active'));
+      const card = document.getElementById(`card-${id}`);
+      if (card) {
+        card.classList.add('active');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // 事件監聽
+    districtSelect.addEventListener('change', render);
+    document.getElementById('levelFilter').addEventListener('change', render);
+    document.getElementById('searchInput').addEventListener('input', render);
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      districtSelect.value = '';
+      document.getElementById('levelFilter').value = '';
+      document.getElementById('searchInput').value = '';
+      render();
+    });
+
+    // 初次載入
+    render();
+  </script>
+</body>
+</html>
